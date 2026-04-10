@@ -1,0 +1,99 @@
+name: Terraform
+
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'environments/**'
+      - 'modules/**'
+  push:
+    branches: [main, dev]
+    paths:
+      - 'environments/**'
+      - 'modules/**'
+
+env:
+  TF_VERSION: "1.5.0"
+
+jobs:
+  plan:
+    name: Plan — ${{ github.base_ref == 'main' && 'prod' || 'dev' }}
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set environment
+        id: vars
+        run: |
+          if [ "${{ github.base_ref }}" == "main" ]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+            echo "sa_key=GCP_PROD_SA_KEY" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "sa_key=GCP_DEV_SA_KEY" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets[steps.vars.outputs.sa_key] }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Make script executable
+        run: chmod +x scripts/deploy.sh
+
+      - name: Run plan
+        id: plan
+        run: ./scripts/deploy.sh ${{ steps.vars.outputs.environment }} plan
+
+      - name: Post plan to PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `#### Terraform Plan — \`${{ steps.vars.outputs.environment }}\`
+            \`\`\`
+            ${{ steps.plan.outputs.stdout }}
+            \`\`\``;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+  apply:
+    name: Apply — ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set environment
+        id: vars
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+            echo "sa_key=GCP_PROD_SA_KEY" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "sa_key=GCP_DEV_SA_KEY" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets[steps.vars.outputs.sa_key] }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Make script executable
+        run: chmod +x scripts/deploy.sh
+
+      - name: Run apply
+        run: ./scripts/deploy.sh ${{ steps.vars.outputs.environment }} apply
