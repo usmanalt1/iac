@@ -24,6 +24,7 @@ locals {
     "bigquery.googleapis.com",
     "iam.googleapis.com",
     "storage.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
   ]
 
   project_apis = {
