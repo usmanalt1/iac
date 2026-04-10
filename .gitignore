@@ -1,0 +1,10 @@
+# local state (bootstrap only — never commit state files)
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# var files with secrets
+*.tfvars
+
+# crash logs
+crash.log.*

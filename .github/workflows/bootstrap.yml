@@ -1,0 +1,43 @@
+name: Bootstrap
+
+on:
+  workflow_dispatch:       # manual trigger only — you click "Run workflow" in GitHub UI
+    inputs:
+      confirm:
+        description: "Type 'yes' to confirm you want to run bootstrap"
+        required: true
+
+jobs:
+  bootstrap:
+    name: Bootstrap GCP project
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'yes'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_BOOTSTRAP_SA_KEY }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.0"
+
+      - name: Terraform init
+        run: terraform init
+        working-directory: bootstrap
+
+      - name: Terraform plan
+        run: terraform plan
+        working-directory: bootstrap
+        env:
+          TF_VAR_billing_account_id: ${{ secrets.GCP_BILLING_ACCOUNT_ID }}
+          TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Terraform apply
+        run: terraform apply -auto-approve
+        working-directory: bootstrap
+        env:
+          TF_VAR_billing_account_id: ${{ secrets.GCP_BILLING_ACCOUNT_ID }}
+          TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
