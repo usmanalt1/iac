@@ -1,6 +1,14 @@
-name: Terraform
-
 on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+
   pull_request:
     branches: [main, dev]
     paths:
@@ -17,7 +25,7 @@ env:
 
 jobs:
   plan:
-    name: Plan — ${{ github.base_ref == 'main' && 'prod' || 'dev' }}
+    name: Plan — ${{ github.event.inputs.environment || (github.base_ref == 'main' && 'prod' || 'dev') }}
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
 
@@ -65,10 +73,10 @@ jobs:
               body: output
             })
 
-  apply:
-    name: Apply — ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+  deploy:
+    name: Deploy — ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'prod' || 'dev') }}
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v4
@@ -76,7 +84,15 @@ jobs:
       - name: Set environment
         id: vars
         run: |
-          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            ENV="prod"
+          else
+            ENV="dev"
+          fi
+
+          if [ "$ENV" == "prod" ]; then
             echo "environment=prod" >> $GITHUB_OUTPUT
             echo "sa_key=GCP_PROD_SA_KEY" >> $GITHUB_OUTPUT
           else
@@ -94,6 +110,9 @@ jobs:
 
       - name: Make script executable
         run: chmod +x scripts/deploy.sh
+
+      - name: Run plan
+        run: ./scripts/deploy.sh ${{ steps.vars.outputs.environment }} plan
 
       - name: Run apply
         run: ./scripts/deploy.sh ${{ steps.vars.outputs.environment }} apply
